@@ -74,10 +74,10 @@ export default function SettingsPage() {
           {saved ? 'Saxlandı!' : saving ? 'Saxlanılır...' : 'Saxla'}
         </button>
 
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-700">
-          <p className="font-semibold mb-2">Webhook quraşdırma:</p>
-          <p>URL: <code className="bg-blue-100 px-1 rounded">https://&lt;ngrok-url&gt;/api/webhook</code></p>
-          <p className="mt-1">Verify Token: <code className="bg-blue-100 px-1 rounded">166yukdasima_webhook_token</code></p>
+        <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-xs text-green-800">
+          <p className="font-semibold mb-2">✅ Webhook (Vercel — həmişə online):</p>
+          <p>URL: <code className="bg-green-100 px-1 rounded select-all">https://166-yukdasima-whatsapp.vercel.app/api/webhook</code></p>
+          <p className="mt-1">Verify Token: <code className="bg-green-100 px-1 rounded">166yukdasima_webhook_token</code></p>
         </div>
       </div>
     </div></div>
