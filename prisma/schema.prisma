@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Audience {
+  id        Int           @id @default(autoincrement())
+  name      String
+  columns   String        @default("[]")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  rows      AudienceRow[]
+}
+
+model AudienceRow {
+  id         Int      @id @default(autoincrement())
+  audienceId Int
+  data       String   @default("{}")
+  audience   Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+}
+
+model Contact {
+  waId       String  @id
+  photoUrl   String?
+  customName String?
+}
+
+model Message {
+  id          Int     @id @default(autoincrement())
+  waId        String
+  contact     String?
+  contactName String?
+  direction   String
+  text        String?
+  type        String  @default("text")
+  timestamp   Int?
+  metadata    String?
+}
+
+model Setting {
+  key   String @id
+  value String
+}

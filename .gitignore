@@ -1,0 +1,10 @@
+.env
+.env.local
+.claude/
+ngrok.exe
+.next/
+node_modules/
+prisma/dev.db
+prisma/dev.db-journal
+public/avatars/
+*.log
