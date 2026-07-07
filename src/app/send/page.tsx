@@ -101,7 +101,7 @@ export default function SendPage() {
     setResults(null)
     setProgress(null)
 
-    const BATCH = 50
+    const BATCH = 15
     let offset = 0
     let mediaId: string | null = null
     let accSent = 0, accFailed = 0, accSkipped = 0

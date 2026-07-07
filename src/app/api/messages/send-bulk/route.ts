@@ -11,7 +11,7 @@ export const maxDuration = 300
 export async function POST(req: Request) {
   const {
     audienceId, templateName, templateLanguage, template, variableMapping,
-    offset = 0, limit = 50, mediaId: passedMediaId, skipAlreadySent = false,
+    offset = 0, limit = 15, mediaId: passedMediaId, skipAlreadySent = false,
   } = await req.json() as {
     audienceId: number
     templateName: string
