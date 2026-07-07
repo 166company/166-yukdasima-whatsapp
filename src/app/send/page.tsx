@@ -42,6 +42,7 @@ export default function SendPage() {
   const [variableMapping, setVariableMapping] = useState<Record<string, string>>({})
   const [checkSent, setCheckSent] = useState<CheckSentInfo | null>(null)
   const [checkingeSent, setCheckingSent] = useState(false)
+  const [marking, setMarking] = useState(false)
 
   useEffect(() => {
     fetch('/api/audiences').then((r) => r.json()).then(setAudiences)
@@ -164,6 +165,23 @@ export default function SendPage() {
 
   const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
 
+  const handleMarkSent = async () => {
+    if (!selectedTemplate || !selectedAudienceId) return
+    setMarking(true)
+    try {
+      const res = await fetch('/api/messages/mark-sent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audienceId: selectedAudienceId, templateName: selectedTemplate.name, template: selectedTemplate }),
+      })
+      const data = await res.json()
+      if (data.marked >= 0) {
+        setCheckSent((prev) => prev ? { ...prev, sentCount: prev.total, newCount: 0 } : null)
+      }
+    } catch {}
+    setMarking(false)
+  }
+
   return (
     <div className="flex h-full">
       {/* Left panel */}
@@ -234,6 +252,17 @@ export default function SendPage() {
                 </div>
               ) : null}
             </div>
+          )}
+
+          {/* Mark all as sent button — shown when there are "phantom" untracked sends */}
+          {!sending && checkSent && checkSent.newCount > 0 && (
+            <button
+              onClick={handleMarkSent}
+              disabled={marking}
+              className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 underline underline-offset-2"
+            >
+              {marking ? 'İşarələnir...' : `${checkSent.newCount} nəfər artıq göndərilsə, göndərilmiş say`}
+            </button>
           )}
 
           {/* Progress bar */}
