@@ -154,9 +154,16 @@ export default function SendPage() {
 
     setSending(false)
     setProgress(null)
-    // Refresh check-sent after send
+    // Optimistically update check-sent UI from send results, then re-fetch from DB
+    if (skipAlreadySent) {
+      setCheckSent((prev) => prev ? {
+        ...prev,
+        sentCount: prev.sentCount + accSent,
+        newCount: Math.max(0, prev.newCount - accSent),
+      } : null)
+    }
     if (selectedAudienceId && selectedTemplate) {
-      fetchCheckSent(selectedAudienceId as number, selectedTemplate.name)
+      setTimeout(() => fetchCheckSent(selectedAudienceId as number, selectedTemplate.name), 1000)
     }
   }
 

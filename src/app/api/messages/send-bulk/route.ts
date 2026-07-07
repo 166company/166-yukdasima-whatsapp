@@ -59,25 +59,24 @@ export async function POST(req: Request) {
   const columns = JSON.parse(audience.columns) as string[]
   const phoneCol = columns[0]
 
-  // Build skip set for "only new" mode
+  // Build skip set for "only new" mode — use PostgreSQL JSON operator for reliable matching
   let skipPhones = new Set<string>()
-  if (skipAlreadySent && offset === 0) {
-    const allPhones = rows.map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? '')).filter(Boolean)
-    const sent = await prisma.message.findMany({
-      where: { direction: 'out', type: 'template', metadata: { contains: `"name":"${templateName}"` }, waId: { in: allPhones } },
-      select: { waId: true },
-      distinct: ['waId'],
-    })
-    skipPhones = new Set(sent.map((m) => m.waId))
-  } else if (skipAlreadySent) {
-    // For subsequent batches, caller passes skipPhones via sentPhones — but simpler: query each batch
-    const batchPhones = rows.map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? '')).filter(Boolean)
-    const sent = await prisma.message.findMany({
-      where: { direction: 'out', type: 'template', metadata: { contains: `"name":"${templateName}"` }, waId: { in: batchPhones } },
-      select: { waId: true },
-      distinct: ['waId'],
-    })
-    skipPhones = new Set(sent.map((m) => m.waId))
+  if (skipAlreadySent) {
+    const batchPhones = rows
+      .map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? ''))
+      .filter(Boolean)
+    if (batchPhones.length > 0) {
+      const sent = await prisma.$queryRaw<Array<{ waId: string }>>`
+        SELECT DISTINCT "waId"
+        FROM "Message"
+        WHERE direction = 'out'
+          AND type = 'template'
+          AND metadata IS NOT NULL
+          AND metadata::jsonb->>'name' = ${templateName}
+          AND "waId" = ANY(${batchPhones})
+      `
+      skipPhones = new Set(sent.map((m) => m.waId))
+    }
   }
 
   const bodyComp = template.components.find((c) => c.type === 'BODY')

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-
-export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/prisma'
 import { normalizePhone } from '@/lib/meta'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -20,21 +20,26 @@ export async function GET(req: Request) {
   const columns = JSON.parse(audience.columns) as string[]
   const phoneCol = columns[0]
 
-  const phones = rows.map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? ''))
+  const phones = rows
+    .map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? ''))
     .filter((p) => p.length >= 10)
 
-  const alreadySentMsgs = await prisma.message.findMany({
-    where: {
-      direction: 'out',
-      type: 'template',
-      metadata: { contains: `"name":"${templateName}"` },
-      waId: { in: phones },
-    },
-    select: { waId: true },
-    distinct: ['waId'],
-  })
+  if (phones.length === 0) {
+    return NextResponse.json({ total: 0, sentCount: 0, newCount: 0, sentPhones: [] })
+  }
 
-  const sentSet = new Set(alreadySentMsgs.map((m) => m.waId))
+  // Use PostgreSQL JSON operator for reliable JSON field matching
+  const result = await prisma.$queryRaw<Array<{ waId: string }>>`
+    SELECT DISTINCT "waId"
+    FROM "Message"
+    WHERE direction = 'out'
+      AND type = 'template'
+      AND metadata IS NOT NULL
+      AND metadata::jsonb->>'name' = ${templateName}
+      AND "waId" = ANY(${phones})
+  `
+
+  const sentSet = new Set(result.map((r) => r.waId))
 
   return NextResponse.json({
     total: phones.length,
