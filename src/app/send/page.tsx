@@ -48,6 +48,16 @@ export default function SendPage() {
   }, [])
 
   useEffect(() => {
+    if (!sending) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [sending])
+
+  useEffect(() => {
     setVariableMapping({})
   }, [selectedTemplate])
 
@@ -55,7 +65,7 @@ export default function SendPage() {
     setCheckingSent(true)
     setCheckSent(null)
     try {
-      const res = await fetch(`/api/messages/check-sent?audienceId=${audienceId}&templateName=${encodeURIComponent(templateName)}`)
+      const res = await fetch(`/api/messages/check-sent?audienceId=${audienceId}&templateName=${encodeURIComponent(templateName)}`, { cache: 'no-store' })
       if (res.ok) setCheckSent(await res.json())
     } catch {}
     setCheckingSent(false)
