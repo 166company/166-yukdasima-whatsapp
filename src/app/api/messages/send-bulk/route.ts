@@ -6,13 +6,21 @@ import {
 } from '@/lib/meta'
 import type { BulkSendResult, Template } from '@/lib/types'
 
+export const maxDuration = 300
+
 export async function POST(req: Request) {
-  const { audienceId, templateName, templateLanguage, template, variableMapping } = await req.json() as {
+  const {
+    audienceId, templateName, templateLanguage, template, variableMapping,
+    offset = 0, limit = 50, mediaId: passedMediaId,
+  } = await req.json() as {
     audienceId: number
     templateName: string
     templateLanguage: string
     template: Template
     variableMapping?: Record<string, string>
+    offset?: number
+    limit?: number
+    mediaId?: string | null
   }
 
   const settings = await getSettings()
@@ -20,26 +28,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Meta tənzimləmələri tapılmadı' }, { status: 400 })
   }
 
-  const audience = await prisma.audience.findUnique({
-    where: { id: audienceId },
-    include: { rows: true },
-  })
+  const audience = await prisma.audience.findUnique({ where: { id: audienceId } })
   if (!audience) return NextResponse.json({ error: 'Auditoriya tapılmadı' }, { status: 404 })
 
-  // Auto-upload template header media if needed
-  let mediaId: string | undefined
-  const headerUrl = getTemplateHeaderUrl(template)
-  const headerFormat = getTemplateHeaderFormat(template)
+  const totalRows = await prisma.audienceRow.count({ where: { audienceId } })
 
-  if (headerUrl && headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
-    try {
-      mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerUrl, headerFormat)
-    } catch (e) {
-      return NextResponse.json({
-        error: `Şəkil yüklənə bilmədi: ${String(e)}. Zəhmət olmasa şəkli başqa bir public URL-də yerləşdirin.`
-      }, { status: 400 })
+  // Upload media only on first batch (offset === 0)
+  let mediaId: string | undefined = passedMediaId ?? undefined
+  if (offset === 0 && !mediaId) {
+    const headerUrl = getTemplateHeaderUrl(template)
+    const headerFormat = getTemplateHeaderFormat(template)
+    if (headerUrl && headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
+      try {
+        mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerUrl, headerFormat)
+      } catch (e) {
+        return NextResponse.json({
+          error: `Şəkil yüklənə bilmədi: ${String(e)}. Zəhmət olmasa şəkli başqa bir public URL-də yerləşdirin.`
+        }, { status: 400 })
+      }
     }
   }
+
+  const rows = await prisma.audienceRow.findMany({
+    where: { audienceId },
+    skip: offset,
+    take: limit,
+  })
 
   const columns = JSON.parse(audience.columns) as string[]
   const phoneCol = columns[0]
@@ -56,7 +70,7 @@ export async function POST(req: Request) {
   const results: BulkSendResult[] = []
   let sent = 0, failed = 0, skipped = 0
 
-  for (const row of audience.rows) {
+  for (const row of rows) {
     const data = JSON.parse(row.data) as Record<string, string>
     const rawPhone = data[phoneCol] ?? ''
     const phone = normalizePhone(rawPhone)
@@ -67,7 +81,6 @@ export async function POST(req: Request) {
       continue
     }
 
-    // Build per-row body parameters from column mapping
     const bodyParams = varNumbers.map((n) => {
       const col = variableMapping![String(n)]
       return col ? (data[col] ?? '') : ''
@@ -121,8 +134,11 @@ export async function POST(req: Request) {
       failed++
     }
 
-    await new Promise((r) => setTimeout(r, 200))
+    await new Promise((r) => setTimeout(r, 100))
   }
 
-  return NextResponse.json({ sent, failed, skipped, results })
+  const processedUpTo = offset + rows.length
+  const done = processedUpTo >= totalRows
+
+  return NextResponse.json({ sent, failed, skipped, results, mediaId: mediaId ?? null, done, processedUpTo, totalRows })
 }

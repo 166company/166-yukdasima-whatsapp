@@ -29,6 +29,7 @@ export default function SendPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   const [sending, setSending] = useState(false)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [results, setResults] = useState<{ sent: number; failed: number; skipped: number; results: BulkSendResult[] } | null>(null)
   const [templateError, setTemplateError] = useState('')
   const [variableMapping, setVariableMapping] = useState<Record<string, string>>({})
@@ -70,20 +71,47 @@ export default function SendPage() {
     if (!selectedTemplate || !selectedAudienceId) return
     setSending(true)
     setResults(null)
-    const res = await fetch('/api/messages/send-bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        audienceId: selectedAudienceId,
-        templateName: selectedTemplate.name,
-        templateLanguage: selectedTemplate.language,
-        template: selectedTemplate,
-        variableMapping: bodyVarNumbers.length > 0 ? variableMapping : undefined,
-      }),
-    })
-    const data = await res.json()
-    setResults(data)
+    setProgress(null)
+
+    const BATCH = 50
+    let offset = 0
+    let mediaId: string | null = null
+    let accSent = 0, accFailed = 0, accSkipped = 0
+    const accResults: BulkSendResult[] = []
+
+    while (true) {
+      const res = await fetch('/api/messages/send-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audienceId: selectedAudienceId,
+          templateName: selectedTemplate.name,
+          templateLanguage: selectedTemplate.language,
+          template: selectedTemplate,
+          variableMapping: bodyVarNumbers.length > 0 ? variableMapping : undefined,
+          offset,
+          limit: BATCH,
+          mediaId,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) { setResults({ sent: accSent, failed: accFailed + 1, skipped: accSkipped, results: accResults }); break }
+
+      mediaId = data.mediaId
+      accSent += data.sent
+      accFailed += data.failed
+      accSkipped += data.skipped
+      accResults.push(...(data.results ?? []))
+
+      setProgress({ done: data.processedUpTo, total: data.totalRows })
+      setResults({ sent: accSent, failed: accFailed, skipped: accSkipped, results: accResults })
+
+      if (data.done) break
+      offset += BATCH
+    }
+
     setSending(false)
+    setProgress(null)
   }
 
   const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
@@ -137,11 +165,24 @@ export default function SendPage() {
             className="w-full flex items-center justify-center gap-2 bg-[#00a884] hover:bg-[#008f6f] text-white py-2.5 rounded-xl font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send size={16} />
-            {sending ? 'Göndərilir...' : 'Göndər'}
+            {sending ? (progress ? `Göndərilir... ${progress.done}/${progress.total}` : 'Göndərilir...') : 'Göndər'}
           </button>
-          {!selectedAudienceId && <p className="text-xs text-gray-400 text-center mt-2">Auditoriya seçin</p>}
-          {selectedAudienceId && !selectedTemplate && <p className="text-xs text-gray-400 text-center mt-2">Template seçin</p>}
-          {selectedAudienceId && selectedTemplate && !allVarsMapped && (
+          {sending && progress && (
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div
+                  className="bg-[#00a884] h-1.5 rounded-full transition-all"
+                  style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-400 text-center mt-1">
+                {Math.round((progress.done / progress.total) * 100)}% tamamlandı
+              </p>
+            </div>
+          )}
+          {!selectedAudienceId && !sending && <p className="text-xs text-gray-400 text-center mt-2">Auditoriya seçin</p>}
+          {selectedAudienceId && !selectedTemplate && !sending && <p className="text-xs text-gray-400 text-center mt-2">Template seçin</p>}
+          {selectedAudienceId && selectedTemplate && !allVarsMapped && !sending && (
             <p className="text-xs text-amber-500 text-center mt-2">Bütün dəyərləri sütuna bağlayın →</p>
           )}
         </div>
