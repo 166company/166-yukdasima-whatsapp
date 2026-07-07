@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Users, Send, MessageSquare, Settings, BarChart3 } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Users, Send, MessageSquare, Settings, BarChart3, LogOut } from 'lucide-react'
 
 const nav = [
   { href: '/audiences', icon: Users, label: 'Auditoriya' },
@@ -13,6 +13,14 @@ const nav = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
+
   return (
     <aside className="w-56 bg-[#111b21] flex flex-col shrink-0 border-r border-white/10">
       <div className="px-5 py-4 border-b border-white/10">
@@ -35,6 +43,15 @@ export default function Sidebar() {
           </Link>
         ))}
       </nav>
+      <div className="border-t border-white/10 p-3">
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 w-full px-3 py-2.5 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+        >
+          <LogOut size={16} />
+          Çıxış
+        </button>
+      </div>
     </aside>
   )
 }
