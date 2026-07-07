@@ -29,11 +29,13 @@ export interface Template {
   name: string
   status: string
   language: string
+  category?: string
   components: TemplateComponent[]
 }
 
 export interface TemplateMeta {
   name: string
+  category?: string
   body?: string
   headerFormat?: string
   mediaId?: string | null

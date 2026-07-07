@@ -39,6 +39,8 @@ model Message {
   type        String  @default("text")
   timestamp   Int?
   metadata    String?
+  wamid       String?
+  status      String?
 }
 
 model Setting {

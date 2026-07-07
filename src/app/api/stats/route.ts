@@ -46,6 +46,41 @@ export async function GET() {
     } catch {}
   }
 
+  // Template statistics
+  const templateMessages = await prisma.message.findMany({
+    where: { direction: 'out', type: 'template' },
+    select: { metadata: true, status: true },
+  })
+
+  const COSTS: Record<string, number> = {
+    MARKETING: 0.0549,
+    UTILITY: 0.0140,
+    AUTHENTICATION: 0.0125,
+    SERVICE: 0.0000,
+  }
+
+  const tMap: Record<string, { category: string; sent: number; delivered: number; read: number; failed: number }> = {}
+  for (const msg of templateMessages) {
+    const meta = msg.metadata ? (JSON.parse(msg.metadata) as { name?: string; category?: string }) : {}
+    const name = meta.name ?? 'Bilinmir'
+    const category = (meta.category ?? 'MARKETING').toUpperCase()
+    if (!tMap[name]) tMap[name] = { category, sent: 0, delivered: 0, read: 0, failed: 0 }
+    tMap[name].sent++
+    if (msg.status === 'delivered') tMap[name].delivered++
+    if (msg.status === 'read') tMap[name].read++
+    if (msg.status === 'failed') tMap[name].failed++
+  }
+
+  const templateStats = Object.entries(tMap).map(([name, d]) => ({
+    name,
+    category: d.category,
+    sent: d.sent,
+    delivered: d.delivered,
+    read: d.read,
+    failed: d.failed,
+    cost: parseFloat((d.sent * (COSTS[d.category] ?? 0.0549)).toFixed(4)),
+  }))
+
   return NextResponse.json({
     db: {
       totalAudiences,
@@ -58,5 +93,6 @@ export async function GET() {
     phone: phoneInfo,
     waba: wabaInfo,
     billing: billingInfo,
+    templateStats,
   })
 }

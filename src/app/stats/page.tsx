@@ -2,6 +2,16 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, Users, MessageSquare, Send, Phone, CreditCard, CheckCircle, AlertCircle, Clock, BarChart3 } from 'lucide-react'
 
+interface TemplateStat {
+  name: string
+  category: string
+  sent: number
+  delivered: number
+  read: number
+  failed: number
+  cost: number
+}
+
 interface Stats {
   db: {
     totalAudiences: number
@@ -26,6 +36,7 @@ interface Stats {
     account_review_status: string
   } | null
   billing: { data: Array<{ credit_type: string; credit_limit: number; currency: string }> } | null
+  templateStats: TemplateStat[]
 }
 
 function QualityBadge({ rating }: { rating: string }) {
@@ -224,6 +235,83 @@ export default function StatsPage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Template stats table */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <BarChart3 size={14} /> Template Statistikası
+            </h2>
+            {stats.templateStats && stats.templateStats.length > 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left px-4 py-3 font-semibold text-gray-600">Template adı</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-600">Növ</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-600">Xərc (USD)</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-600">Göndərildi</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-600">Çatdırıldı</th>
+                        <th className="text-right px-4 py-3 font-semibold text-gray-600">Açıldı</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.templateStats.map((t, i) => {
+                        const catColors: Record<string, string> = {
+                          MARKETING: 'bg-purple-100 text-purple-700',
+                          UTILITY: 'bg-blue-100 text-blue-700',
+                          AUTHENTICATION: 'bg-orange-100 text-orange-700',
+                          SERVICE: 'bg-gray-100 text-gray-600',
+                        }
+                        const catLabels: Record<string, string> = {
+                          MARKETING: 'Marketinq',
+                          UTILITY: 'Xidmət',
+                          AUTHENTICATION: 'Autentifikasiya',
+                          SERVICE: 'Servis',
+                        }
+                        return (
+                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${catColors[t.category] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {catLabels[t.category] ?? t.category}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-700">${t.cost.toFixed(4)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-800">{t.sent}</td>
+                            <td className="px-4 py-3 text-right text-green-600">{t.delivered}</td>
+                            <td className="px-4 py-3 text-right text-blue-600">{t.read}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+                        <td className="px-4 py-3 text-gray-700">Cəmi</td>
+                        <td className="px-4 py-3"></td>
+                        <td className="px-4 py-3 text-right text-gray-800">
+                          ${stats.templateStats.reduce((s, t) => s + t.cost, 0).toFixed(4)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-800">
+                          {stats.templateStats.reduce((s, t) => s + t.sent, 0)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-green-700">
+                          {stats.templateStats.reduce((s, t) => s + t.delivered, 0)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-blue-700">
+                          {stats.templateStats.reduce((s, t) => s + t.read, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+                Hələ template göndərilməyib
+              </div>
+            )}
           </div>
 
           {/* Messaging limits info */}

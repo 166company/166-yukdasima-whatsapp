@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     const components = buildTemplateComponents(template, mediaId, bodyParams.length > 0 ? bodyParams : undefined)
 
     try {
-      await sendTemplateMessage(
+      const sendResult = await sendTemplateMessage(
         settings.meta_token!,
         settings.phone_id!,
         phone,
@@ -84,6 +84,7 @@ export async function POST(req: Request) {
         templateLanguage,
         components as unknown[]
       )
+      const wamid = (sendResult as { messages?: Array<{ id?: string }> })?.messages?.[0]?.id ?? null
 
       let filledBody = bodyTextRaw
       if (filledBody && bodyParams.length > 0) {
@@ -92,6 +93,7 @@ export async function POST(req: Request) {
 
       const metadata = JSON.stringify({
         name: templateName,
+        category: template.category ?? null,
         body: filledBody,
         headerFormat: headerFmt,
         mediaId: mediaId ?? null,
@@ -107,6 +109,8 @@ export async function POST(req: Request) {
           type: 'template',
           timestamp: Math.floor(Date.now() / 1000),
           metadata,
+          wamid,
+          status: wamid ? 'sent' : null,
         },
       })
 

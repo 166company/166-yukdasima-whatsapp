@@ -18,7 +18,7 @@ export function normalizePhone(raw: string): string {
 }
 
 export async function fetchApprovedTemplates(token: string, wabaId: string): Promise<Template[]> {
-  const url = `https://graph.facebook.com/v19.0/${wabaId}/message_templates?fields=name,status,language,components&limit=100&status=APPROVED`
+  const url = `https://graph.facebook.com/v19.0/${wabaId}/message_templates?fields=name,status,language,category,components&limit=100&status=APPROVED`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',

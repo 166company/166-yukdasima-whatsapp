@@ -80,12 +80,16 @@ export async function POST(req: Request) {
           })
         }
 
-        // Delivery status updates — log errors to console
+        // Delivery status updates — update Message status by wamid
         for (const st of value.statuses ?? []) {
+          if (st.id && st.status) {
+            await prisma.message.updateMany({
+              where: { wamid: st.id },
+              data: { status: st.status },
+            })
+          }
           if (st.errors?.length) {
             console.error(`[WA delivery] ${st.id} → ${st.status} | ${st.recipient_id} | ${JSON.stringify(st.errors)}`)
-          } else {
-            console.log(`[WA delivery] ${st.id} → ${st.status} | ${st.recipient_id}`)
           }
         }
       }
