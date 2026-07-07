@@ -108,7 +108,7 @@ export default function SendPage() {
     const accResults: BulkSendResult[] = []
 
     while (true) {
-      const res = await fetch('/api/messages/send-bulk', {
+      const res: Response = await fetch('/api/messages/send-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
