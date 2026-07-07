@@ -28,18 +28,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ total: 0, sentCount: 0, newCount: 0, sentPhones: [] })
   }
 
-  // Use PostgreSQL JSON operator for reliable JSON field matching
-  const result = await prisma.$queryRaw<Array<{ waId: string }>>`
-    SELECT DISTINCT "waId"
-    FROM "Message"
-    WHERE direction = 'out'
-      AND type = 'template'
-      AND metadata IS NOT NULL
-      AND metadata::jsonb->>'name' = ${templateName}
-      AND "waId" = ANY(${phones})
-  `
+  // Fetch all outgoing template messages for these phones, filter by template name in JS
+  const msgs = await prisma.message.findMany({
+    where: {
+      direction: 'out',
+      type: 'template',
+      waId: { in: phones },
+    },
+    select: { waId: true, metadata: true },
+  })
 
-  const sentSet = new Set(result.map((r) => r.waId))
+  const sentSet = new Set<string>()
+  for (const m of msgs) {
+    try {
+      const parsed = JSON.parse(m.metadata ?? '{}') as { name?: string }
+      if (parsed.name === templateName) sentSet.add(m.waId)
+    } catch {}
+  }
 
   return NextResponse.json({
     total: phones.length,

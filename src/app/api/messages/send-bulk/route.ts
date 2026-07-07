@@ -59,23 +59,23 @@ export async function POST(req: Request) {
   const columns = JSON.parse(audience.columns) as string[]
   const phoneCol = columns[0]
 
-  // Build skip set for "only new" mode — use PostgreSQL JSON operator for reliable matching
+  // Build skip set — fetch outgoing template messages for batch phones, filter by name in JS
   let skipPhones = new Set<string>()
   if (skipAlreadySent) {
     const batchPhones = rows
       .map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? ''))
       .filter(Boolean)
     if (batchPhones.length > 0) {
-      const sent = await prisma.$queryRaw<Array<{ waId: string }>>`
-        SELECT DISTINCT "waId"
-        FROM "Message"
-        WHERE direction = 'out'
-          AND type = 'template'
-          AND metadata IS NOT NULL
-          AND metadata::jsonb->>'name' = ${templateName}
-          AND "waId" = ANY(${batchPhones})
-      `
-      skipPhones = new Set(sent.map((m) => m.waId))
+      const msgs = await prisma.message.findMany({
+        where: { direction: 'out', type: 'template', waId: { in: batchPhones } },
+        select: { waId: true, metadata: true },
+      })
+      for (const m of msgs) {
+        try {
+          const parsed = JSON.parse(m.metadata ?? '{}') as { name?: string }
+          if (parsed.name === templateName) skipPhones.add(m.waId)
+        } catch {}
+      }
     }
   }
 
