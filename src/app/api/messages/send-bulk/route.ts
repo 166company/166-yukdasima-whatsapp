@@ -11,7 +11,7 @@ export const maxDuration = 300
 export async function POST(req: Request) {
   const {
     audienceId, templateName, templateLanguage, template, variableMapping,
-    offset = 0, limit = 50, mediaId: passedMediaId,
+    offset = 0, limit = 50, mediaId: passedMediaId, skipAlreadySent = false,
   } = await req.json() as {
     audienceId: number
     templateName: string
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     offset?: number
     limit?: number
     mediaId?: string | null
+    skipAlreadySent?: boolean
   }
 
   const settings = await getSettings()
@@ -58,6 +59,27 @@ export async function POST(req: Request) {
   const columns = JSON.parse(audience.columns) as string[]
   const phoneCol = columns[0]
 
+  // Build skip set for "only new" mode
+  let skipPhones = new Set<string>()
+  if (skipAlreadySent && offset === 0) {
+    const allPhones = rows.map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? '')).filter(Boolean)
+    const sent = await prisma.message.findMany({
+      where: { direction: 'out', type: 'template', metadata: { contains: `"name":"${templateName}"` }, waId: { in: allPhones } },
+      select: { waId: true },
+      distinct: ['waId'],
+    })
+    skipPhones = new Set(sent.map((m) => m.waId))
+  } else if (skipAlreadySent) {
+    // For subsequent batches, caller passes skipPhones via sentPhones — but simpler: query each batch
+    const batchPhones = rows.map((r) => normalizePhone((JSON.parse(r.data) as Record<string, string>)[phoneCol] ?? '')).filter(Boolean)
+    const sent = await prisma.message.findMany({
+      where: { direction: 'out', type: 'template', metadata: { contains: `"name":"${templateName}"` }, waId: { in: batchPhones } },
+      select: { waId: true },
+      distinct: ['waId'],
+    })
+    skipPhones = new Set(sent.map((m) => m.waId))
+  }
+
   const bodyComp = template.components.find((c) => c.type === 'BODY')
   const bodyTextRaw = (bodyComp as Record<string, unknown> | undefined)?.text as string | undefined
   const headerComp = template.components.find((c) => c.type === 'HEADER')
@@ -77,6 +99,12 @@ export async function POST(req: Request) {
 
     if (!phone || phone.length < 10) {
       results.push({ phone: rawPhone, status: 'skipped', error: 'Yanlış nömrə' })
+      skipped++
+      continue
+    }
+
+    if (skipPhones.has(phone)) {
+      results.push({ phone, status: 'skipped', error: 'Artıq göndərilib' })
       skipped++
       continue
     }

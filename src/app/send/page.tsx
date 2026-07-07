@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { Send, RefreshCw, CheckCircle, XCircle, SkipForward } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Send, RefreshCw, CheckCircle, XCircle, SkipForward, Users, UserCheck, UserX } from 'lucide-react'
 import TemplateCard from '@/components/TemplateCard'
 import AudiencePreview from '@/components/AudiencePreview'
 import TemplatePreview from '@/components/TemplatePreview'
@@ -21,6 +21,13 @@ function getBodyVarExample(template: Template, n: number): string | undefined {
   return example?.[0]?.[n - 1]
 }
 
+interface CheckSentInfo {
+  total: number
+  sentCount: number
+  newCount: number
+  sentPhones: string[]
+}
+
 export default function SendPage() {
   const [audiences, setAudiences] = useState<AudienceListItem[]>([])
   const [selectedAudienceId, setSelectedAudienceId] = useState<number | ''>('')
@@ -33,6 +40,8 @@ export default function SendPage() {
   const [results, setResults] = useState<{ sent: number; failed: number; skipped: number; results: BulkSendResult[] } | null>(null)
   const [templateError, setTemplateError] = useState('')
   const [variableMapping, setVariableMapping] = useState<Record<string, string>>({})
+  const [checkSent, setCheckSent] = useState<CheckSentInfo | null>(null)
+  const [checkingeSent, setCheckingSent] = useState(false)
 
   useEffect(() => {
     fetch('/api/audiences').then((r) => r.json()).then(setAudiences)
@@ -42,12 +51,31 @@ export default function SendPage() {
     setVariableMapping({})
   }, [selectedTemplate])
 
+  const fetchCheckSent = useCallback(async (audienceId: number, templateName: string) => {
+    setCheckingSent(true)
+    setCheckSent(null)
+    try {
+      const res = await fetch(`/api/messages/check-sent?audienceId=${audienceId}&templateName=${encodeURIComponent(templateName)}`)
+      if (res.ok) setCheckSent(await res.json())
+    } catch {}
+    setCheckingSent(false)
+  }, [])
+
+  useEffect(() => {
+    if (selectedAudienceId && selectedTemplate) {
+      fetchCheckSent(selectedAudienceId as number, selectedTemplate.name)
+    } else {
+      setCheckSent(null)
+    }
+  }, [selectedAudienceId, selectedTemplate, fetchCheckSent])
+
   const bodyVarNumbers = selectedTemplate ? getBodyVarNumbers(selectedTemplate) : []
   const allVarsMapped = bodyVarNumbers.every((n) => !!variableMapping[String(n)])
 
   const selectAudience = async (id: number) => {
     setSelectedAudienceId(id)
     setAudienceFull(null)
+    setCheckSent(null)
     if (!id) return
     const res = await fetch(`/api/audiences/${id}`)
     setAudienceFull(await res.json())
@@ -67,7 +95,7 @@ export default function SendPage() {
     setLoadingTemplates(false)
   }
 
-  const handleSend = async () => {
+  const runSend = async (skipAlreadySent: boolean) => {
     if (!selectedTemplate || !selectedAudienceId) return
     setSending(true)
     setResults(null)
@@ -92,10 +120,14 @@ export default function SendPage() {
           offset,
           limit: BATCH,
           mediaId,
+          skipAlreadySent,
         }),
       })
       const data = await res.json()
-      if (data.error) { setResults({ sent: accSent, failed: accFailed + 1, skipped: accSkipped, results: accResults }); break }
+      if (data.error) {
+        setResults({ sent: accSent, failed: accFailed + 1, skipped: accSkipped, results: accResults })
+        break
+      }
 
       mediaId = data.mediaId
       accSent += data.sent
@@ -112,13 +144,17 @@ export default function SendPage() {
 
     setSending(false)
     setProgress(null)
+    // Refresh check-sent after send
+    if (selectedAudienceId && selectedTemplate) {
+      fetchCheckSent(selectedAudienceId as number, selectedTemplate.name)
+    }
   }
 
   const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
 
   return (
     <div className="flex h-full">
-      {/* Left: audience + template selection */}
+      {/* Left panel */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col overflow-y-auto shrink-0">
         <div className="p-5 border-b border-gray-200">
           <h2 className="font-semibold text-gray-800 mb-3">Göndərmə</h2>
@@ -154,36 +190,89 @@ export default function SendPage() {
             </div>
             {templateError && <p className="text-xs text-red-500">{templateError}</p>}
           </div>
-
         </div>
 
-        {/* Send button */}
-        <div className="p-5 border-b border-gray-200">
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            className="w-full flex items-center justify-center gap-2 bg-[#00a884] hover:bg-[#008f6f] text-white py-2.5 rounded-xl font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Send size={16} />
-            {sending ? (progress ? `Göndərilir... ${progress.done}/${progress.total}` : 'Göndərilir...') : 'Göndər'}
-          </button>
+        {/* Send status check + buttons */}
+        <div className="p-5 border-b border-gray-200 space-y-3">
+
+          {/* Check-sent summary */}
+          {selectedAudienceId && selectedTemplate && (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              {checkingeSent ? (
+                <div className="flex items-center justify-center gap-2 py-3 text-xs text-gray-400">
+                  <RefreshCw size={12} className="animate-spin" /> Yoxlanılır...
+                </div>
+              ) : checkSent ? (
+                <div className="divide-y divide-gray-100">
+                  <div className="flex items-center gap-3 px-4 py-2.5">
+                    <Users size={15} className="text-gray-400 shrink-0" />
+                    <span className="text-xs text-gray-500 flex-1">Ümumi kontakt</span>
+                    <span className="text-sm font-bold text-gray-800">{checkSent.total}</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-50">
+                    <UserCheck size={15} className="text-amber-500 shrink-0" />
+                    <span className="text-xs text-amber-600 flex-1">Artıq göndərilib</span>
+                    <span className="text-sm font-bold text-amber-600">{checkSent.sentCount}</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-green-50">
+                    <UserX size={15} className="text-green-600 shrink-0" />
+                    <span className="text-xs text-green-700 flex-1">Yeni kontakt</span>
+                    <span className="text-sm font-bold text-green-700">{checkSent.newCount}</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* Progress bar */}
           {sending && progress && (
-            <div className="mt-2">
+            <div>
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <div
                   className="bg-[#00a884] h-1.5 rounded-full transition-all"
                   style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
                 />
               </div>
-              <p className="text-xs text-gray-400 text-center mt-1">
-                {Math.round((progress.done / progress.total) * 100)}% tamamlandı
+              <p className="text-xs text-gray-500 text-center mt-1">
+                {progress.done}/{progress.total} — {Math.round((progress.done / progress.total) * 100)}%
               </p>
             </div>
           )}
-          {!selectedAudienceId && !sending && <p className="text-xs text-gray-400 text-center mt-2">Auditoriya seçin</p>}
-          {selectedAudienceId && !selectedTemplate && !sending && <p className="text-xs text-gray-400 text-center mt-2">Template seçin</p>}
+
+          {/* Send buttons */}
+          {!sending && canSend && checkSent && checkSent.newCount > 0 && (
+            <button
+              onClick={() => runSend(true)}
+              className="w-full flex items-center justify-center gap-2 bg-[#00a884] hover:bg-[#008f6f] text-white py-2.5 rounded-xl font-medium text-sm transition-colors"
+            >
+              <Send size={15} />
+              {checkSent.newCount}-ə göndər (yeni)
+            </button>
+          )}
+          {!sending && canSend && (
+            <button
+              onClick={() => runSend(false)}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium text-sm transition-colors border ${
+                checkSent && checkSent.newCount > 0
+                  ? 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  : 'bg-[#00a884] hover:bg-[#008f6f] text-white border-transparent'
+              }`}
+            >
+              <Send size={15} />
+              Hamısına göndər ({checkSent ? checkSent.total : '...'})
+            </button>
+          )}
+          {sending && (
+            <div className="w-full flex items-center justify-center gap-2 bg-[#00a884] text-white py-2.5 rounded-xl font-medium text-sm opacity-70 cursor-not-allowed">
+              <RefreshCw size={15} className="animate-spin" />
+              {progress ? `Göndərilir... ${progress.done}/${progress.total}` : 'Göndərilir...'}
+            </div>
+          )}
+
+          {!selectedAudienceId && !sending && <p className="text-xs text-gray-400 text-center">Auditoriya seçin</p>}
+          {selectedAudienceId && !selectedTemplate && !sending && <p className="text-xs text-gray-400 text-center">Template seçin</p>}
           {selectedAudienceId && selectedTemplate && !allVarsMapped && !sending && (
-            <p className="text-xs text-amber-500 text-center mt-2">Bütün dəyərləri sütuna bağlayın →</p>
+            <p className="text-xs text-amber-500 text-center">Bütün dəyərləri sütuna bağlayın →</p>
           )}
         </div>
 
