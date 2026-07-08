@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-const VERIFY_TOKEN = '166yukdasima_webhook_token'
+const VERIFY_TOKEN = 'a63d40f01980d9cdd042b3c745d7c382553bee0a'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
