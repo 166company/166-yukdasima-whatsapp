@@ -189,6 +189,14 @@ export default function SendPage() {
     if (!selectedTemplate) return
     const fmt = getHeaderFormat(selectedTemplate)
     if (!fmt) return
+
+    // WhatsApp limits: video 16MB, image 5MB, document 100MB
+    const maxMb = fmt === 'VIDEO' ? 16 : fmt === 'IMAGE' ? 5 : 100
+    if (file.size > maxMb * 1024 * 1024) {
+      alert(`Fayl çox böyükdür (${(file.size / 1024 / 1024).toFixed(1)} MB).\nWhatsApp limiti: ${maxMb} MB.\n\nZəhmət olmasa videonu sıxışdırıb (compress edib) yenidən yükləyin.\nTövsiyə: HandBrake proqramı ilə 720p + 16MB-dan aşağı edin.`)
+      return
+    }
+
     setUploadingMedia(true)
     try {
       // Get Meta credentials for direct browser → Meta upload (bypasses Vercel 4.5MB limit)
@@ -217,7 +225,8 @@ export default function SendPage() {
       const uploadData = await uploadRes.json() as { id?: string; error?: { message: string; code?: number; fbtrace_id?: string } }
 
       if (!uploadRes.ok || !uploadData.id) {
-        alert(`Meta upload xətası:\n${JSON.stringify(uploadData, null, 2)}`)
+        const details = uploadData.error?.message ?? JSON.stringify(uploadData)
+        alert(`Upload xətası: ${details}`)
         setUploadingMedia(false)
         return
       }
