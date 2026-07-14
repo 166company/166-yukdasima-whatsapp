@@ -95,6 +95,49 @@ export function getTemplateHeaderFormat(template: Template): string | null {
   return (header as unknown as Record<string, unknown>).format as string ?? null
 }
 
+export async function resolveTemplateMediaId(
+  token: string,
+  phoneId: string,
+  headerHandle: string,
+  format: string
+): Promise<string> {
+  // Non-URL handle — use directly as media ID
+  if (!headerHandle.startsWith('http')) return headerHandle
+
+  // Extract numeric media ID from WhatsApp CDN URL
+  // e.g. https://scontent.whatsapp.net/v/t61.29466-34/{MEDIA_ID}/...
+  const match = headerHandle.match(/\/t[\d.]+[-\d]+\/(\d{10,})\//)
+  if (match) {
+    const mediaId = match[1]
+    try {
+      // Ask Meta for a fresh 5-minute download URL
+      const infoRes = await fetch(
+        `https://graph.facebook.com/v19.0/${mediaId}?phone_number_id=${phoneId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (infoRes.ok) {
+        const info = await infoRes.json() as { url?: string }
+        if (info.url) {
+          // Download from fresh URL (requires Bearer token)
+          const dlRes = await fetch(info.url, { headers: { Authorization: `Bearer ${token}` } })
+          if (dlRes.ok) {
+            const ct = dlRes.headers.get('content-type') ?? ''
+            if (!ct.includes('text/html')) {
+              const buf = await dlRes.arrayBuffer()
+              const mimeMap: Record<string, string> = { IMAGE: 'image/jpeg', VIDEO: 'video/mp4', DOCUMENT: 'application/pdf' }
+              const mime = mimeMap[format] ?? 'video/mp4'
+              return await uploadMediaBlob(token, phoneId, buf, mime, `media.${mime.split('/')[1]}`)
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Fall back: direct download attempt
+  return await uploadMediaFromUrl(token, phoneId, headerHandle, format)
+}
+
 export async function uploadMediaFromUrl(
   token: string,
   phoneId: string,

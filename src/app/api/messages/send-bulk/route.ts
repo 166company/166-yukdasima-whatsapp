@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   getSettings, normalizePhone, buildTemplateComponents, sendTemplateMessage,
-  getTemplateHeaderUrl, getTemplateHeaderFormat, uploadMediaFromUrl
+  getTemplateHeaderUrl, getTemplateHeaderFormat, resolveTemplateMediaId, uploadMediaFromUrl
 } from '@/lib/meta'
 import type { BulkSendResult, Template } from '@/lib/types'
 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
             mediaId = cached.value
           } else {
             try {
-              mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, sourceUrl, headerFormat)
+              mediaId = await resolveTemplateMediaId(settings.meta_token, settings.phone_id, sourceUrl, headerFormat)
               // Cache for future sends
               await prisma.setting.upsert({
                 where: { key: cacheKey },
