@@ -173,9 +173,7 @@ export default function SendPage() {
     } : null)
   }
 
-  const headerFormat = selectedTemplate ? getHeaderFormat(selectedTemplate) : null
-  const mediaUrlRequired = !!headerFormat && !customMediaUrl.trim()
-  const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped && !mediaUrlRequired
+  const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
 
   const handleMarkSent = async () => {
     if (!selectedTemplate || !selectedAudienceId) return
@@ -327,9 +325,6 @@ export default function SendPage() {
           {selectedAudienceId && selectedTemplate && !allVarsMapped && !sending && (
             <p className="text-xs text-amber-500 text-center">Bütün dəyərləri sütuna bağlayın →</p>
           )}
-          {selectedAudienceId && selectedTemplate && allVarsMapped && mediaUrlRequired && !sending && (
-            <p className="text-xs text-amber-500 text-center">{headerFormat} URL daxil edin →</p>
-          )}
         </div>
 
         {/* Results */}
@@ -405,8 +400,8 @@ export default function SendPage() {
                 placeholder="https://example.com/video.mp4"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500"
               />
-              <p className="text-xs text-amber-600 mt-1.5">
-                Açıq (public) URL daxil edin — bu template-in mediası üçün lazımdır
+              <p className="text-xs text-gray-400 mt-1.5">
+                Boş buraxsanız avtomatik Meta template-dən götürülür
               </p>
             </div>
           )}

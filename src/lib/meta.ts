@@ -101,12 +101,18 @@ export async function uploadMediaFromUrl(
   url: string,
   format: string
 ): Promise<string> {
-  // CDN URLs are usually public — try without auth first, fall back to Bearer
+  // Try without auth first, fall back to Bearer
   let fetchRes = await fetch(url)
   if (!fetchRes.ok) {
     fetchRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   }
-  if (!fetchRes.ok) throw new Error(`Media yüklənə bilmədi: ${fetchRes.status}`)
+  if (!fetchRes.ok) throw new Error(`Fayl yüklənə bilmədi: HTTP ${fetchRes.status}`)
+
+  // Reject HTML responses (expired CDN links return login pages)
+  const ct = fetchRes.headers.get('content-type') ?? ''
+  if (ct.includes('text/html')) {
+    throw new Error('CDN URL müddəti bitib və ya əlçatmazdır')
+  }
 
   const buffer = await fetchRes.arrayBuffer()
   const mimeMap: Record<string, string> = {

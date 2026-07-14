@@ -40,28 +40,32 @@ export async function POST(req: Request) {
   if (offset === 0 && !mediaId) {
     const headerFormat = getTemplateHeaderFormat(template)
     if (headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
-      if (customMediaUrl) {
-        // User-provided URL — upload to Media API to get a persistent ID
-        try {
-          mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, customMediaUrl, headerFormat)
-        } catch (e) {
-          return NextResponse.json({
-            error: `Media yüklənə bilmədi (${headerFormat}): ${String(e)}`
-          }, { status: 400 })
-        }
-      } else {
-        const headerHandle = getTemplateHeaderUrl(template)
-        if (headerHandle) {
-          if (headerHandle.startsWith('http')) {
+      const sourceUrl = customMediaUrl?.trim() || getTemplateHeaderUrl(template)
+
+      if (sourceUrl) {
+        if (!sourceUrl.startsWith('http')) {
+          // Already a media handle/ID — use directly
+          mediaId = sourceUrl
+        } else {
+          // Check DB cache first (avoid re-uploading the same media)
+          const cacheKey = `tmpl_media_${templateName}`
+          const cached = await prisma.setting.findUnique({ where: { key: cacheKey } })
+          if (cached?.value) {
+            mediaId = cached.value
+          } else {
             try {
-              mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
+              mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, sourceUrl, headerFormat)
+              // Cache for future sends
+              await prisma.setting.upsert({
+                where: { key: cacheKey },
+                update: { value: mediaId },
+                create: { key: cacheKey, value: mediaId },
+              })
             } catch (e) {
               return NextResponse.json({
-                error: `Template media yüklənə bilmədi. Zəhmət olmasa sağ paneldə ${headerFormat} URL daxil edin.`
+                error: `Template media yüklənə bilmədi: ${String(e)}`
               }, { status: 400 })
             }
-          } else {
-            mediaId = headerHandle
           }
         }
       }
