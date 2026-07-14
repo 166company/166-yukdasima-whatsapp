@@ -43,19 +43,17 @@ export function getBodyVariableCount(template: Template): number {
 export function buildTemplateComponents(template: Template, mediaId?: string, bodyParams?: string[]) {
   const result: unknown[] = []
 
-  // Header component — support both media ID and public URL
+  // Header component — media ID from Media API upload
   const header = template.components.find((c) => c.type === 'HEADER')
   if (header) {
     const fmt = (header as unknown as Record<string, unknown>).format as string | undefined
     if (mediaId) {
-      const isUrl = mediaId.startsWith('http')
-      const mediaObj = (type: string) => isUrl ? { [type]: { link: mediaId } } : { [type]: { id: mediaId } }
       if (fmt === 'IMAGE') {
-        result.push({ type: 'header', parameters: [{ type: 'image', ...mediaObj('image') }] })
+        result.push({ type: 'header', parameters: [{ type: 'image', image: { id: mediaId } }] })
       } else if (fmt === 'VIDEO') {
-        result.push({ type: 'header', parameters: [{ type: 'video', ...mediaObj('video') }] })
+        result.push({ type: 'header', parameters: [{ type: 'video', video: { id: mediaId } }] })
       } else if (fmt === 'DOCUMENT') {
-        result.push({ type: 'header', parameters: [{ type: 'document', ...mediaObj('document') }] })
+        result.push({ type: 'header', parameters: [{ type: 'document', document: { id: mediaId } }] })
       }
     }
   }
@@ -103,11 +101,12 @@ export async function uploadMediaFromUrl(
   url: string,
   format: string
 ): Promise<string> {
-  // Fetch image — try with Bearer token first (works for scontent.whatsapp.net)
-  const fetchRes = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!fetchRes.ok) throw new Error(`Şəkil yüklənə bilmədi: ${fetchRes.status}`)
+  // CDN URLs are usually public — try without auth first, fall back to Bearer
+  let fetchRes = await fetch(url)
+  if (!fetchRes.ok) {
+    fetchRes = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  }
+  if (!fetchRes.ok) throw new Error(`Media yüklənə bilmədi: ${fetchRes.status}`)
 
   const buffer = await fetchRes.arrayBuffer()
   const mimeMap: Record<string, string> = {

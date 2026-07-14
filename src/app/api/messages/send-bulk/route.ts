@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   getSettings, normalizePhone, buildTemplateComponents, sendTemplateMessage,
-  getTemplateHeaderUrl, getTemplateHeaderFormat
+  getTemplateHeaderUrl, getTemplateHeaderFormat, uploadMediaFromUrl
 } from '@/lib/meta'
 import type { BulkSendResult, Template } from '@/lib/types'
 
@@ -34,13 +34,19 @@ export async function POST(req: Request) {
 
   const totalRows = await prisma.audienceRow.count({ where: { audienceId } })
 
-  // Use template header_handle directly as media reference (persistent Meta media handle)
+  // Upload header media on first batch only, reuse mediaId on subsequent batches
   let mediaId: string | undefined = passedMediaId ?? undefined
   if (offset === 0 && !mediaId) {
     const headerHandle = getTemplateHeaderUrl(template)
     const headerFormat = getTemplateHeaderFormat(template)
     if (headerHandle && headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
-      mediaId = headerHandle
+      try {
+        mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
+      } catch (e) {
+        return NextResponse.json({
+          error: `Media yüklənə bilmədi: ${String(e)}`
+        }, { status: 400 })
+      }
     }
   }
 
