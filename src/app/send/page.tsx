@@ -191,17 +191,35 @@ export default function SendPage() {
     if (!fmt) return
     setUploadingMedia(true)
     try {
+      // Get Meta credentials for direct browser → Meta upload (bypasses Vercel 4.5MB limit)
+      const configRes = await fetch('/api/media/upload-config')
+      const { token, phoneId } = await configRes.json() as { token: string; phoneId: string }
+
       const form = new FormData()
-      form.append('file', file)
-      form.append('templateName', selectedTemplate.name)
-      form.append('format', fmt)
-      const res = await fetch('/api/media/upload-template', { method: 'POST', body: form })
-      const data = await res.json()
-      if (data.mediaId) {
-        setTemplateMediaCached(prev => ({ ...prev, [selectedTemplate.name]: true }))
-      } else {
-        alert(data.error ?? 'Yükləmə xətası')
+      form.append('messaging_product', 'whatsapp')
+      form.append('type', file.type)
+      form.append('file', file, file.name)
+
+      const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/media`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const uploadData = await uploadRes.json() as { id?: string; error?: { message: string } }
+
+      if (!uploadRes.ok || !uploadData.id) {
+        alert(uploadData.error?.message ?? 'Meta upload xətası')
+        setUploadingMedia(false)
+        return
       }
+
+      // Save media ID to DB via our API
+      await fetch('/api/media/cache-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateName: selectedTemplate.name, mediaId: uploadData.id }),
+      })
+      setTemplateMediaCached(prev => ({ ...prev, [selectedTemplate.name]: true }))
     } catch (e) {
       alert(String(e))
     }
