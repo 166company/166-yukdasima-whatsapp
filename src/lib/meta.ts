@@ -104,38 +104,54 @@ export async function resolveTemplateMediaId(
   // Non-URL handle — use directly as media ID
   if (!headerHandle.startsWith('http')) return headerHandle
 
+  const steps: string[] = [`handle=${headerHandle.slice(0, 60)}`]
+
   // Extract numeric media ID from WhatsApp CDN URL
-  // e.g. https://scontent.whatsapp.net/v/t61.29466-34/{MEDIA_ID}/...
-  const match = headerHandle.match(/\/t[\d.]+[-\d]+\/(\d{10,})\//)
+  const match = headerHandle.match(/\/t[\d.]+[-\d]+\/(\d{10,})\//) ||
+                headerHandle.match(/mid=(\d{10,})/) ||
+                headerHandle.match(/\/(\d{10,})[/?]/)
   if (match) {
     const mediaId = match[1]
+    steps.push(`extracted_id=${mediaId}`)
     try {
       // Ask Meta for a fresh 5-minute download URL
       const infoRes = await fetch(
         `https://graph.facebook.com/v19.0/${mediaId}?phone_number_id=${phoneId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
+      const infoText = await infoRes.text()
+      steps.push(`info_status=${infoRes.status}`)
       if (infoRes.ok) {
-        const info = await infoRes.json() as { url?: string }
+        const info = JSON.parse(infoText) as { url?: string }
         if (info.url) {
-          // Download from fresh URL (requires Bearer token)
+          steps.push('got_fresh_url')
           const dlRes = await fetch(info.url, { headers: { Authorization: `Bearer ${token}` } })
+          steps.push(`dl_status=${dlRes.status}`)
           if (dlRes.ok) {
             const ct = dlRes.headers.get('content-type') ?? ''
+            steps.push(`ct=${ct.slice(0, 30)}`)
             if (!ct.includes('text/html')) {
               const buf = await dlRes.arrayBuffer()
+              steps.push(`buf_size=${buf.byteLength}`)
               const mimeMap: Record<string, string> = { IMAGE: 'image/jpeg', VIDEO: 'video/mp4', DOCUMENT: 'application/pdf' }
               const mime = mimeMap[format] ?? 'video/mp4'
               return await uploadMediaBlob(token, phoneId, buf, mime, `media.${mime.split('/')[1]}`)
             }
           }
+        } else {
+          steps.push(`no_url_in_response: ${infoText.slice(0, 80)}`)
         }
+      } else {
+        steps.push(`info_error: ${infoText.slice(0, 80)}`)
       }
-    } catch {}
+    } catch (e) {
+      steps.push(`exception: ${String(e)}`)
+    }
+  } else {
+    steps.push('no_id_match')
   }
 
-  // Fall back: direct download attempt
-  return await uploadMediaFromUrl(token, phoneId, headerHandle, format)
+  throw new Error(`Media həll edilə bilmədi. Addımlar: ${steps.join(' → ')}`)
 }
 
 export async function uploadMediaFromUrl(
