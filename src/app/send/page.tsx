@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Send, RefreshCw, CheckCircle, XCircle, SkipForward, Users, UserCheck, UserX, Link } from 'lucide-react'
+import { Send, RefreshCw, CheckCircle, XCircle, SkipForward, Users, UserCheck, UserX, Upload, CheckCircle2 } from 'lucide-react'
 import TemplateCard from '@/components/TemplateCard'
 import AudiencePreview from '@/components/AudiencePreview'
 import TemplatePreview from '@/components/TemplatePreview'
@@ -50,6 +50,8 @@ export default function SendPage() {
   const [checkingeSent, setCheckingSent] = useState(false)
   const [marking, setMarking] = useState(false)
   const [customMediaUrl, setCustomMediaUrl] = useState('')
+  const [templateMediaCached, setTemplateMediaCached] = useState<Record<string, boolean>>({})
+  const [uploadingMedia, setUploadingMedia] = useState(false)
 
   useEffect(() => {
     fetch('/api/audiences').then((r) => r.json()).then(setAudiences)
@@ -68,6 +70,14 @@ export default function SendPage() {
   useEffect(() => {
     setVariableMapping({})
     setCustomMediaUrl('')
+    if (selectedTemplate && getHeaderFormat(selectedTemplate)) {
+      fetch(`/api/media/check-cached?templateName=${encodeURIComponent(selectedTemplate.name)}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.cached) setTemplateMediaCached(prev => ({ ...prev, [selectedTemplate.name]: true }))
+        })
+        .catch(() => {})
+    }
   }, [selectedTemplate])
 
   const fetchCheckSent = useCallback(async (audienceId: number, templateName: string) => {
@@ -174,6 +184,29 @@ export default function SendPage() {
   }
 
   const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
+
+  const handleMediaUpload = async (file: File) => {
+    if (!selectedTemplate) return
+    const fmt = getHeaderFormat(selectedTemplate)
+    if (!fmt) return
+    setUploadingMedia(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('templateName', selectedTemplate.name)
+      form.append('format', fmt)
+      const res = await fetch('/api/media/upload-template', { method: 'POST', body: form })
+      const data = await res.json()
+      if (data.mediaId) {
+        setTemplateMediaCached(prev => ({ ...prev, [selectedTemplate.name]: true }))
+      } else {
+        alert(data.error ?? 'Yükləmə xətası')
+      }
+    } catch (e) {
+      alert(String(e))
+    }
+    setUploadingMedia(false)
+  }
 
   const handleMarkSent = async () => {
     if (!selectedTemplate || !selectedAudienceId) return
@@ -389,20 +422,30 @@ export default function SendPage() {
         <div className="w-80 border-l border-gray-200 bg-white p-5 overflow-y-auto shrink-0 space-y-5">
           {getHeaderFormat(selectedTemplate) && (
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide flex items-center gap-1.5">
-                <Link size={12} />
-                {getHeaderFormat(selectedTemplate)} URL
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
+                {getHeaderFormat(selectedTemplate)} MEDIA
               </p>
-              <input
-                type="url"
-                value={customMediaUrl}
-                onChange={(e) => setCustomMediaUrl(e.target.value)}
-                placeholder="https://example.com/video.mp4"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              <p className="text-xs text-gray-400 mt-1.5">
-                Boş buraxsanız avtomatik Meta template-dən götürülür
-              </p>
+              {templateMediaCached[selectedTemplate.name] ? (
+                <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  <span>Media yüklənib, hazırdır</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className={`flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg px-3 py-3 text-xs cursor-pointer transition-colors ${uploadingMedia ? 'border-gray-200 text-gray-300' : 'border-gray-300 text-gray-500 hover:border-green-400 hover:text-green-600'}`}>
+                    <Upload size={14} />
+                    {uploadingMedia ? 'Yüklənir...' : `${getHeaderFormat(selectedTemplate)} faylı seçin`}
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={uploadingMedia}
+                      accept={getHeaderFormat(selectedTemplate) === 'VIDEO' ? 'video/*' : getHeaderFormat(selectedTemplate) === 'IMAGE' ? 'image/*' : '*'}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMediaUpload(f) }}
+                    />
+                  </label>
+                  <p className="text-xs text-amber-600">Göndərməzdən əvvəl bir dəfə yükləyin</p>
+                </div>
+              )}
             </div>
           )}
           {bodyVarNumbers.length > 0 && (
