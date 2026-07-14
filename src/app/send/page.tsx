@@ -195,20 +195,29 @@ export default function SendPage() {
       const configRes = await fetch('/api/media/upload-config')
       const { token, phoneId } = await configRes.json() as { token: string; phoneId: string }
 
+      // Determine correct MIME type (file.type may be empty on some systems)
+      const mimeByExt: Record<string, string> = {
+        mp4: 'video/mp4', '3gp': 'video/3gpp', mov: 'video/quicktime',
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf',
+      }
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      const mime = file.type || mimeByExt[ext] || (fmt === 'VIDEO' ? 'video/mp4' : 'image/jpeg')
+
       const form = new FormData()
       form.append('messaging_product', 'whatsapp')
-      form.append('type', fmt.toLowerCase())  // 'video', 'image', or 'document'
-      form.append('file', file, file.name)
+      form.append('type', mime)
+      form.append('file', new Blob([await file.arrayBuffer()], { type: mime }), file.name)
 
       const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/media`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       })
-      const uploadData = await uploadRes.json() as { id?: string; error?: { message: string } }
+      const uploadData = await uploadRes.json() as { id?: string; error?: { message: string; code?: number; fbtrace_id?: string } }
 
       if (!uploadRes.ok || !uploadData.id) {
-        alert(uploadData.error?.message ?? 'Meta upload xətası')
+        alert(`Meta upload xətası:\n${JSON.stringify(uploadData, null, 2)}`)
         setUploadingMedia(false)
         return
       }
