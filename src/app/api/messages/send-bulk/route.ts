@@ -11,7 +11,7 @@ export const maxDuration = 300
 export async function POST(req: Request) {
   const {
     audienceId, templateName, templateLanguage, template, variableMapping,
-    offset = 0, limit = 15, mediaId: passedMediaId, skipAlreadySent = false,
+    offset = 0, limit = 15, mediaId: passedMediaId, customMediaUrl, skipAlreadySent = false,
   } = await req.json() as {
     audienceId: number
     templateName: string
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     offset?: number
     limit?: number
     mediaId?: string | null
+    customMediaUrl?: string
     skipAlreadySent?: boolean
   }
 
@@ -34,24 +35,35 @@ export async function POST(req: Request) {
 
   const totalRows = await prisma.audienceRow.count({ where: { audienceId } })
 
-  // Upload header media on first batch only, reuse mediaId on subsequent batches
+  // Resolve media ID on first batch only, reuse on subsequent batches
   let mediaId: string | undefined = passedMediaId ?? undefined
   if (offset === 0 && !mediaId) {
-    const headerHandle = getTemplateHeaderUrl(template)
     const headerFormat = getTemplateHeaderFormat(template)
-    if (headerHandle && headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
-      if (headerHandle.startsWith('http')) {
-        // CDN URL — download and re-upload to get a usable media ID
+    if (headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
+      if (customMediaUrl) {
+        // User-provided URL — upload to Media API to get a persistent ID
         try {
-          mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
+          mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, customMediaUrl, headerFormat)
         } catch (e) {
           return NextResponse.json({
             error: `Media yüklənə bilmədi (${headerFormat}): ${String(e)}`
           }, { status: 400 })
         }
       } else {
-        // Already a media handle/ID — use directly
-        mediaId = headerHandle
+        const headerHandle = getTemplateHeaderUrl(template)
+        if (headerHandle) {
+          if (headerHandle.startsWith('http')) {
+            try {
+              mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
+            } catch (e) {
+              return NextResponse.json({
+                error: `Template media yüklənə bilmədi. Zəhmət olmasa sağ paneldə ${headerFormat} URL daxil edin.`
+              }, { status: 400 })
+            }
+          } else {
+            mediaId = headerHandle
+          }
+        }
       }
     }
   }

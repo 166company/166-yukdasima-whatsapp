@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Send, RefreshCw, CheckCircle, XCircle, SkipForward, Users, UserCheck, UserX } from 'lucide-react'
+import { Send, RefreshCw, CheckCircle, XCircle, SkipForward, Users, UserCheck, UserX, Link } from 'lucide-react'
 import TemplateCard from '@/components/TemplateCard'
 import AudiencePreview from '@/components/AudiencePreview'
 import TemplatePreview from '@/components/TemplatePreview'
@@ -13,6 +13,12 @@ function getBodyVarNumbers(template: Template): number[] {
   const matches = text.match(/\{\{(\d+)\}\}/g) ?? []
   const nums = Array.from(new Set(matches.map((m) => Number(m.replace(/[{}]/g, ''))))).sort((a, b) => a - b)
   return nums
+}
+
+function getHeaderFormat(template: Template): string | null {
+  const h = template.components.find((c) => c.type === 'HEADER') as Record<string, unknown> | undefined
+  const fmt = h?.format as string | undefined
+  return fmt && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(fmt) ? fmt : null
 }
 
 function getBodyVarExample(template: Template, n: number): string | undefined {
@@ -43,6 +49,7 @@ export default function SendPage() {
   const [checkSent, setCheckSent] = useState<CheckSentInfo | null>(null)
   const [checkingeSent, setCheckingSent] = useState(false)
   const [marking, setMarking] = useState(false)
+  const [customMediaUrl, setCustomMediaUrl] = useState('')
 
   useEffect(() => {
     fetch('/api/audiences').then((r) => r.json()).then(setAudiences)
@@ -60,6 +67,7 @@ export default function SendPage() {
 
   useEffect(() => {
     setVariableMapping({})
+    setCustomMediaUrl('')
   }, [selectedTemplate])
 
   const fetchCheckSent = useCallback(async (audienceId: number, templateName: string) => {
@@ -131,6 +139,7 @@ export default function SendPage() {
           offset,
           limit: BATCH,
           mediaId,
+          customMediaUrl: customMediaUrl.trim() || undefined,
           skipAlreadySent,
         }),
       })
@@ -164,7 +173,9 @@ export default function SendPage() {
     } : null)
   }
 
-  const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped
+  const headerFormat = selectedTemplate ? getHeaderFormat(selectedTemplate) : null
+  const mediaUrlRequired = !!headerFormat && !customMediaUrl.trim()
+  const canSend = !!selectedAudienceId && !!selectedTemplate && !sending && allVarsMapped && !mediaUrlRequired
 
   const handleMarkSent = async () => {
     if (!selectedTemplate || !selectedAudienceId) return
@@ -316,6 +327,9 @@ export default function SendPage() {
           {selectedAudienceId && selectedTemplate && !allVarsMapped && !sending && (
             <p className="text-xs text-amber-500 text-center">Bütün dəyərləri sütuna bağlayın →</p>
           )}
+          {selectedAudienceId && selectedTemplate && allVarsMapped && mediaUrlRequired && !sending && (
+            <p className="text-xs text-amber-500 text-center">{headerFormat} URL daxil edin →</p>
+          )}
         </div>
 
         {/* Results */}
@@ -378,6 +392,24 @@ export default function SendPage() {
       {/* Right: live preview + variable mapping */}
       {selectedTemplate && (
         <div className="w-80 border-l border-gray-200 bg-white p-5 overflow-y-auto shrink-0 space-y-5">
+          {getHeaderFormat(selectedTemplate) && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                <Link size={12} />
+                {getHeaderFormat(selectedTemplate)} URL
+              </p>
+              <input
+                type="url"
+                value={customMediaUrl}
+                onChange={(e) => setCustomMediaUrl(e.target.value)}
+                placeholder="https://example.com/video.mp4"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-xs text-amber-600 mt-1.5">
+                Açıq (public) URL daxil edin — bu template-in mediası üçün lazımdır
+              </p>
+            </div>
+          )}
           {bodyVarNumbers.length > 0 && (
             <div>
               <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
