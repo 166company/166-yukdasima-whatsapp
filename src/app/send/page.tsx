@@ -136,6 +136,7 @@ export default function SendPage() {
       })
       const data = await res.json()
       if (data.error) {
+        accResults.push({ phone: 'XƏTA', status: 'failed', error: data.error })
         setResults({ sent: accSent, failed: accFailed + 1, skipped: accSkipped, results: accResults })
         break
       }

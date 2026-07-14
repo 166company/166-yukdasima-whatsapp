@@ -40,12 +40,18 @@ export async function POST(req: Request) {
     const headerHandle = getTemplateHeaderUrl(template)
     const headerFormat = getTemplateHeaderFormat(template)
     if (headerHandle && headerFormat && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat)) {
-      try {
-        mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
-      } catch (e) {
-        return NextResponse.json({
-          error: `Media yüklənə bilmədi: ${String(e)}`
-        }, { status: 400 })
+      if (headerHandle.startsWith('http')) {
+        // CDN URL — download and re-upload to get a usable media ID
+        try {
+          mediaId = await uploadMediaFromUrl(settings.meta_token, settings.phone_id, headerHandle, headerFormat)
+        } catch (e) {
+          return NextResponse.json({
+            error: `Media yüklənə bilmədi (${headerFormat}): ${String(e)}`
+          }, { status: 400 })
+        }
+      } else {
+        // Already a media handle/ID — use directly
+        mediaId = headerHandle
       }
     }
   }
