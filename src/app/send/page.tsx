@@ -197,7 +197,7 @@ export default function SendPage() {
 
       const form = new FormData()
       form.append('messaging_product', 'whatsapp')
-      form.append('type', file.type)
+      form.append('type', fmt.toLowerCase())  // 'video', 'image', or 'document'
       form.append('file', file, file.name)
 
       const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/media`, {
