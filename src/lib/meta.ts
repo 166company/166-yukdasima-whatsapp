@@ -43,17 +43,19 @@ export function getBodyVariableCount(template: Template): number {
 export function buildTemplateComponents(template: Template, mediaId?: string, bodyParams?: string[]) {
   const result: unknown[] = []
 
-  // Header component — use uploaded media ID
+  // Header component — support both media ID and public URL
   const header = template.components.find((c) => c.type === 'HEADER')
   if (header) {
     const fmt = (header as unknown as Record<string, unknown>).format as string | undefined
     if (mediaId) {
+      const isUrl = mediaId.startsWith('http')
+      const mediaObj = (type: string) => isUrl ? { [type]: { link: mediaId } } : { [type]: { id: mediaId } }
       if (fmt === 'IMAGE') {
-        result.push({ type: 'header', parameters: [{ type: 'image', image: { id: mediaId } }] })
+        result.push({ type: 'header', parameters: [{ type: 'image', ...mediaObj('image') }] })
       } else if (fmt === 'VIDEO') {
-        result.push({ type: 'header', parameters: [{ type: 'video', video: { id: mediaId } }] })
+        result.push({ type: 'header', parameters: [{ type: 'video', ...mediaObj('video') }] })
       } else if (fmt === 'DOCUMENT') {
-        result.push({ type: 'header', parameters: [{ type: 'document', document: { id: mediaId } }] })
+        result.push({ type: 'header', parameters: [{ type: 'document', ...mediaObj('document') }] })
       }
     }
   }
