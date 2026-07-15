@@ -464,7 +464,13 @@ export default function SendPage() {
               {templateMediaCached[selectedTemplate.name] ? (
                 <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                   <CheckCircle2 size={14} className="shrink-0" />
-                  <span>Media yüklənib, hazırdır</span>
+                  <span className="flex-1">Media yüklənib, hazırdır</span>
+                  <button
+                    onClick={() => setTemplateMediaCached(prev => ({ ...prev, [selectedTemplate.name]: false }))}
+                    className="text-gray-400 hover:text-gray-600 underline underline-offset-1 shrink-0"
+                  >
+                    Dəyiş
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
