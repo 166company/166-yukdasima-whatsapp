@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
   try {
     const mediaId = await uploadMediaBlob(settings.meta_token, settings.phone_id, buffer, file.type, file.name)
-    await sendMediaMessage(settings.meta_token, settings.phone_id, to, mediaType, mediaId, caption, file.name)
+    await sendMediaMessage(settings.meta_token, settings.phone_id, to, mediaType, mediaId, caption, file.name, settings.waba_id)
 
     const metadata = caption ? JSON.stringify({ caption }) : null
     await prisma.message.create({

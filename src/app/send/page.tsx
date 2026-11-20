@@ -416,12 +416,12 @@ export default function SendPage() {
             </div>
             <div className="max-h-48 overflow-y-auto space-y-1">
               {results.results.map((r, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  {r.status === 'sent' && <CheckCircle size={12} className="text-green-500 shrink-0" />}
-                  {r.status === 'failed' && <XCircle size={12} className="text-red-400 shrink-0" />}
-                  {r.status === 'skipped' && <SkipForward size={12} className="text-gray-400 shrink-0" />}
-                  <span className="text-gray-600">{r.phone}</span>
-                  {r.error && <span className="text-red-400 truncate">{r.error}</span>}
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  {r.status === 'sent' && <CheckCircle size={12} className="text-green-500 shrink-0 mt-0.5" />}
+                  {r.status === 'failed' && <XCircle size={12} className="text-red-400 shrink-0 mt-0.5" />}
+                  {r.status === 'skipped' && <SkipForward size={12} className="text-gray-400 shrink-0 mt-0.5" />}
+                  <span className="text-gray-600 shrink-0">{r.phone}</span>
+                  {r.error && <span className="text-red-400 break-all select-text" title={r.error}>{r.error}</span>}
                 </div>
               ))}
             </div>

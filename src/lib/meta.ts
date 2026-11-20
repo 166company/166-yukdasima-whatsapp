@@ -10,6 +10,26 @@ export async function getSettings(): Promise<Settings> {
   return obj
 }
 
+// Builds a readable error from a failed Graph API response, keeping the
+// code/subcode/details that Meta returns (the bare `message` is often too vague).
+export async function formatMetaError(res: Response): Promise<string> {
+  const err = await res.json().catch(() => ({})) as {
+    error?: {
+      message?: string; code?: number; error_subcode?: number
+      error_user_msg?: string; fbtrace_id?: string
+      error_data?: { details?: string }
+    }
+  }
+  const e = err?.error ?? {}
+  return [
+    e.message || `Meta API error (HTTP ${res.status})`,
+    e.error_data?.details,
+    e.error_user_msg,
+    e.code != null ? `code=${e.code}${e.error_subcode != null ? `/${e.error_subcode}` : ''}` : undefined,
+    e.fbtrace_id ? `trace=${e.fbtrace_id}` : undefined,
+  ].filter(Boolean).join(' | ')
+}
+
 export function normalizePhone(raw: string): string {
   let p = (raw || '').replace(/\D/g, '')
   if (p.startsWith('0') && p.length === 10) p = '994' + p.slice(1)
@@ -226,7 +246,8 @@ export async function sendMediaMessage(
   mediaType: 'image' | 'video' | 'document' | 'audio',
   mediaId: string,
   caption?: string,
-  filename?: string
+  filename?: string,
+  messagingAccountId?: string
 ) {
   const mediaObj: Record<string, unknown> = { id: mediaId }
   if (caption && (mediaType === 'image' || mediaType === 'video' || mediaType === 'document')) {
@@ -242,14 +263,14 @@ export async function sendMediaMessage(
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
+      ...(messagingAccountId ? { messaging_account_id: messagingAccountId } : {}),
       to,
       type: mediaType,
       [mediaType]: mediaObj,
     }),
   })
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err?.error?.message || 'Meta API error')
+    throw new Error(await formatMetaError(res))
   }
   return res.json()
 }
@@ -260,10 +281,15 @@ export async function sendTemplateMessage(
   to: string,
   templateName: string,
   languageCode: string,
-  components: unknown[]
+  components: unknown[],
+  messagingAccountId?: string
 ) {
   const payload: Record<string, unknown> = {
     messaging_product: 'whatsapp',
+    // Required when the number is linked to more than one Messaging account
+    // (e.g. a WABA + a Paid Messaging Account); otherwise Meta may resolve the
+    // template against the wrong account (#132001) or reject the send (#10).
+    ...(messagingAccountId ? { messaging_account_id: messagingAccountId } : {}),
     to,
     type: 'template',
     template: {
@@ -283,8 +309,7 @@ export async function sendTemplateMessage(
     body: JSON.stringify(payload),
   })
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err?.error?.message || 'Meta API error')
+    throw new Error(await formatMetaError(res))
   }
   return res.json()
 }
@@ -293,7 +318,8 @@ export async function sendTextMessage(
   token: string,
   phoneId: string,
   to: string,
-  text: string
+  text: string,
+  messagingAccountId?: string
 ) {
   const res = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
     method: 'POST',
@@ -303,14 +329,14 @@ export async function sendTextMessage(
     },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
+      ...(messagingAccountId ? { messaging_account_id: messagingAccountId } : {}),
       to,
       type: 'text',
       text: { body: text },
     }),
   })
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err?.error?.message || 'Meta API error')
+    throw new Error(await formatMetaError(res))
   }
   return res.json()
 }

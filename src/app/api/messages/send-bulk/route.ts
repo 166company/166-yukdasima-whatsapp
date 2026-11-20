@@ -144,7 +144,8 @@ export async function POST(req: Request) {
         phone,
         templateName,
         templateLanguage,
-        components as unknown[]
+        components as unknown[],
+        settings.waba_id
       )
       const wamid = (sendResult as { messages?: Array<{ id?: string }> })?.messages?.[0]?.id ?? null
 

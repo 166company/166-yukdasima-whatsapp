@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Meta tənzimləmələri tapılmadı' }, { status: 400 })
   }
 
-  const sendResult = await sendTextMessage(settings.meta_token, settings.phone_id, to, text.trim())
+  const sendResult = await sendTextMessage(settings.meta_token, settings.phone_id, to, text.trim(), settings.waba_id)
   const wamid = (sendResult as { messages?: Array<{ id?: string }> })?.messages?.[0]?.id ?? null
 
   await prisma.message.create({
